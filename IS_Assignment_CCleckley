@@ -1,0 +1,178 @@
+import argparse
+import csv
+import re
+import urllib.request
+from datetime import datetime
+
+
+def download_data(url):
+    """
+    Downloads the web log CSV file from the URL.
+    """
+    response = urllib.request.urlopen(url)
+    data = response.read().decode('utf-8')
+    return data
+
+
+def process_data(data):
+    """
+    Reads the CSV data and stores each row in a list.
+    """
+    records = []
+
+    lines = data.splitlines()
+    reader = csv.reader(lines)
+
+    for row in reader:
+        if len(row) < 5:
+            continue
+
+        record = {
+            'path': row[0].strip(),
+            'datetime': row[1].strip(),
+            'browser': row[2].strip(),
+            'status': row[3].strip(),
+            'size': row[4].strip()
+        }
+
+        records.append(record)
+
+    return records
+
+
+def image_stats(records):
+    """
+    Finds image requests using a regular expression.
+    """
+    image_pattern = re.compile(
+        r'\.(jpg|gif|png)$',
+        re.IGNORECASE
+    )
+
+    image_count = 0
+
+    for record in records:
+        if image_pattern.search(record['path']):
+            image_count += 1
+
+    total_requests = len(records)
+
+    if total_requests > 0:
+        percentage = (image_count / total_requests) * 100
+    else:
+        percentage = 0
+
+    print(
+        "Image requests account for {:.1f}% of all requests".format(
+            percentage
+        )
+    )
+
+
+def browser_stats(records):
+    """
+    Counts Firefox, Chrome, Internet Explorer,
+    and Safari requests.
+    """
+    browser_counts = {
+        'Firefox': 0,
+        'Chrome': 0,
+        'Internet Explorer': 0,
+        'Safari': 0
+    }
+
+    for record in records:
+        user_agent = record['browser']
+
+        if re.search(r'Firefox', user_agent, re.IGNORECASE):
+            browser_counts['Firefox'] += 1
+
+        elif re.search(r'Chrome', user_agent, re.IGNORECASE):
+            browser_counts['Chrome'] += 1
+
+        elif re.search(
+            r'MSIE|Trident',
+            user_agent,
+            re.IGNORECASE
+        ):
+            browser_counts['Internet Explorer'] += 1
+
+        elif re.search(r'Safari', user_agent, re.IGNORECASE):
+            browser_counts['Safari'] += 1
+
+    most_popular = max(
+        browser_counts,
+        key=browser_counts.get
+    )
+
+    print(
+        "The most popular browser is {}".format(
+            most_popular
+        )
+    )
+
+
+def hourly_stats(records):
+    """
+    Extra credit:
+    Counts requests by hour and sorts from
+    highest number of hits to lowest.
+    """
+    hour_counts = {}
+
+    for hour in range(24):
+        hour_counts[hour] = 0
+
+    for record in records:
+        try:
+            access_time = datetime.strptime(
+                record['datetime'],
+                '%Y-%m-%d %H:%M:%S'
+            )
+
+            hour_counts[access_time.hour] += 1
+
+        except ValueError:
+            continue
+
+    sorted_hours = sorted(
+        hour_counts.items(),
+        key=lambda item: item[1],
+        reverse=True
+    )
+
+    for hour, hits in sorted_hours:
+        print(
+            "Hour {:02d} has {} hits".format(
+                hour,
+                hits
+            )
+        )
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Process a web log CSV file.'
+    )
+
+    parser.add_argument(
+        '--url',
+        required=True,
+        help='URL of the web log CSV file'
+    )
+
+    args = parser.parse_args()
+
+    data = download_data(args.url)
+
+    records = process_data(data)
+
+    image_stats(records)
+
+    browser_stats(records)
+
+    hourly_stats(records)
+
+
+if __name__ == '__main__':
+    main()
